@@ -13,11 +13,11 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-def read_csv(dataset_path, dtype=None):
+def read_csv(dataset_path, dtype=None, sep=',', header='infer'):
     """
     Loads the provided .csv file using pandas.
     """
-    return pd.read_csv(dataset_path, dtype=dtype)
+    return pd.read_csv(dataset_path, dtype=dtype, sep=sep, header=header)
 
 def create_directory(dir_path):
     """
