@@ -99,6 +99,9 @@ def opt_bin_woe(data, solver, outlier_detector, save_path, verbose):
         os.mkdir(optbinning_save_path)
 
     for column in tqdm(data.dtypes.index):
+        if verbose:
+            print('Processing feature: ' + column + '.')
+
         if data.dtypes[column] in ['float64', 'int64']:
             column_dtype = "numerical"
         elif data.dtypes[column] in ['category']:
