@@ -32,7 +32,15 @@ def int64_to_float64(data):
     """
     for column in data.dtypes.index:
         if data.dtypes[column] in ['int64']:
-            data[column] = data[column].astype(float)
+            data[column] = data[column].astype('float64')
+
+def object_to_category(data):
+    """
+    Converts all object columns of the dataframe to category.
+    """
+    for column in data.dtypes.index:
+        if data.dtypes[column] in ['object']:
+            data[column] = data[column].astype('category')
 
 def replace_to_nan(data, word):
     """
