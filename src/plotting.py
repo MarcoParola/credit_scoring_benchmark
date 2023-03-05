@@ -131,7 +131,7 @@ def plot_features_scores(features, feature_scores, title, figsize=(10, 4), save_
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     ax.legend(['IV Score'], loc='best', prop={'size': 16})
-    ax.set_ylim([0.0, 3.0])
+    ax.set_ylim([0.0, 1.0])
 
     if save_path is not None:
         plt.savefig(save_path + 'features_scores.pdf', format="pdf", bbox_inches="tight")
