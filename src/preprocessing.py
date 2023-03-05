@@ -118,7 +118,7 @@ def opt_bin_woe(data, solver, outlier_detector, save_path, verbose):
         binning_table_df = binning_table.build()
         features_scores[column] = binning_table_df['IV']['Totals']
         binning_table.plot(metric="woe", show_bin_labels=True,
-                           savefig=optbinning_save_path+'/'+column+'-binning.pdf',
+                           savefig=optbinning_save_path+'/'+column.replace('/', '-')+'-binning.pdf',
                            figsize=(10,10))
         data[column] = optb.transform(x, metric="woe")
         
