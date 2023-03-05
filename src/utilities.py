@@ -19,6 +19,12 @@ def read_csv(dataset_path, dtype=None, sep=',', header='infer'):
     """
     return pd.read_csv(dataset_path, dtype=dtype, sep=sep, header=header)
 
+def read_excel(dataset_path, dtype=None, header=0):
+    """
+    Loads the provided .xls file using pandas.
+    """
+    return pd.read_excel(dataset_path, dtype=dtype, header=header)
+
 def create_directory(dir_path):
     """
     Creates the specified directory.
