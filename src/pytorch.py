@@ -7,8 +7,6 @@ pytorch.py: Implementation of utility functions for PyTorch models.
 __author__      = "Rambod Rahmani <rambodrahmani@autistici.org>"
 __copyright__   = "Rambod Rahmani 2023"
 
-import numpy as np
-
 from torch import Tensor
 from torch.nn import Module, Linear, ReLU, Sigmoid
 from torch.utils.data import Dataset
@@ -17,13 +15,13 @@ from torch.nn.init import kaiming_uniform_, xavier_uniform_
 
 from sklearn.preprocessing import LabelEncoder
 
-class CSVDataset(Dataset):
-    def __init__(self, df, target):
-        self.X = np.array(df.drop([target], axis=1, inplace=False))
-        self.X = self.X.astype('float32')
+class CSDataset(Dataset):
+    """
+    """
+    def __init__(self, X, y):
+        self.X = X.astype('float32')
 
-        self.y = np.array(df[target])
-        self.y = LabelEncoder().fit_transform(self.y)
+        self.y = LabelEncoder().fit_transform(y)
         self.y = self.y.astype('float32')
         self.y = self.y.reshape((len(self.y), 1))
 
