@@ -25,6 +25,12 @@ def read_excel(dataset_path, dtype=None, header=0):
     """
     return pd.read_excel(dataset_path, dtype=dtype, header=header)
 
+def read_parquet(dataset_path):
+    """
+    Loads the provided .parquet file using pandas.
+    """
+    return pd.read_parquet(dataset_path)
+
 def create_directory(dir_path):
     """
     Creates the specified directory.
@@ -80,3 +86,14 @@ def save_dataset(data, features_scores, test_size, save_path):
 
     print("Train split size: " + str(len(train_split)))
     print("Test split size: " + str(len(test_split)))
+
+def read_features_scores(dataset_path):
+    """
+    Reads and returns the features_scores.json file for the given dataset.
+    """
+    ret = {}
+
+    with open(dataset_path + 'features_scores.json') as json_file:
+        ret = json.load(json_file)
+
+    return ret
