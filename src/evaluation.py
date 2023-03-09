@@ -79,23 +79,199 @@ def create_model_save_path(model_name):
 
     return ret
 
-def k_fold_cross_validate(layers, train_data, test_data, target, k_folds,
+def k_fold_cross_validate(clf, layers, train_data, test_data, target, classes, k_folds,
                           features_scores, features, model_name, learning_rate,
-                          epochs, batch_size, classes, verbose):
+                          epochs, batch_size, verbose):
     """
     Runs k-fold cross validation on the model.
     """
     save_path = create_model_save_path(model_name)
     print('Model save_path: ' + save_path)
 
-    if len(layers) > 0:
-        k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_folds,
-                                       features_scores, features, model_name, learning_rate,
-                                       epochs, batch_size, classes, save_path, verbose)
+    if layers is not None:
+        k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes,
+                                       k_folds, features_scores, features, model_name,
+                                       learning_rate, epochs, batch_size, save_path, verbose)
+    else:
+        k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
+                                       k_folds, features_scores, features, model_name,
+                                       save_path, verbose)
 
-def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_folds,
+def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
+                                   k_folds, features_scores, features, model_name,
+                                   save_path, verbose):
+    """
+    Performs K-fold Cross Validation using the given model on the given dataset.
+    """
+    # store train and test metrics
+    model_accuracies_train = []
+    model_accuracies_val = []
+    model_f1_train = []
+    model_f1_val = []
+    model_precision_train = []
+    model_precision_val = []
+    model_recall_train = []
+    model_recall_val = []
+    model_fpr = []
+    model_tpr = []
+    model_thresh = []
+    model_auc = []
+    model_conf_matrix_list = []
+    gini_scores = []
+    brier_scores = []
+    emp_scores = []
+    emp_fractions = []
+
+    # separate class label from other features
+    train_labels = np.array(train_data[target])
+    train_data = train_data.drop([target], axis=1, inplace=False)
+    train_data = train_data.select_dtypes(include=['float64', 'int64', 'bool'])
+
+    test_labels = np.array(test_data[target])
+    test_data = test_data.drop([target], axis=1, inplace=False)
+    test_data = test_data.select_dtypes(include=['float64', 'int64', 'bool'])
+
+    # current fold index
+    fold_counter = 1
+
+    # features selection
+    if features > 0:
+        k_best_features = select_k_best_features(features_scores, features, verbose,
+                                                 save_path = save_path + '/' + model_name + '-',)
+        print('Selected Features: ' + str(k_best_features))
+
+    # k-fold cross validation
+    skf = StratifiedKFold(n_splits=k_folds, shuffle=True)
+    for train_index, val_index in tqdm(skf.split(train_data, train_labels)):
+        if verbose:
+            display(Markdown("# **FOLD " + str(fold_counter) + "**"))
+
+        # split data in train and test set
+        X_train, X_val = train_data.iloc[train_index], train_data.iloc[val_index]
+        y_train, y_val = train_labels[train_index], train_labels[val_index]
+
+        # only use high scoring features
+        if features > 0:
+            X_train = X_train[k_best_features]
+            X_val = X_val[k_best_features]
+            test_data = test_data[k_best_features]
+
+        # train model
+        clf = clf.fit(X_train, y_train)
+
+        # test model on train and test set
+        pred_train = clf.predict(X_train)
+        pred_val = clf.predict(X_val)
+        pred_test = clf.predict(test_data)
+        pred_probs = clf.predict_proba(test_data)[:, 1]
+
+        # collect performance metrics
+        model_accuracies_train.append(metrics.accuracy_score(y_train, pred_train, classes))
+        model_accuracies_val.append(metrics.accuracy_score(y_val, pred_val, classes))
+        model_f1_train.append(metrics.f1_score(y_train, pred_train, classes))
+        model_f1_val.append(metrics.f1_score(y_val, pred_val, classes))
+        model_precision_train.append(metrics.precision_score(y_train, pred_train, classes))
+        model_precision_val.append(metrics.precision_score(y_val, pred_val, classes))
+        model_recall_train.append(metrics.recall_score(y_train, pred_train, classes))
+        model_recall_val.append(metrics.recall_score(y_val, pred_val, classes))
+        model_conf_matrix_list.append(metrics.cm_score(test_labels, pred_test, classes))        
+
+        model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(test_labels, pred_probs)
+        model_fpr.append(model_fpr_new)
+        model_tpr.append(model_tpr_new)
+        model_thresh.append(model_thresh_new)
+        model_auc_new = metrics.roc_auc_score(test_labels, pred_test)
+        model_auc.append(model_auc_new)
+
+        gini_scores.append(metrics.normalized_gini_score(test_labels, pred_probs))
+        brier_scores.append(metrics.brier_score(test_labels, pred_probs))
+        emp = metrics.emp_score_frac(test_labels, pred_probs)
+        emp_scores.append(emp.EMPC)
+        emp_fractions.append(emp.EMPC_fraction)
+
+        if verbose:
+            metrics.classification_report(y_train, pred_train, y_val, pred_val)
+
+        fold_counter += 1
+
+    # store metrics as csv file
+    metrics_dict = {'accuracy': model_accuracies_val,
+                    'f1': model_f1_val,
+                    'precision': model_precision_val,
+                    'recall': model_recall_val,
+                    'auc': model_auc,
+                    'gini': gini_scores,
+                    'brier': brier_scores,
+                    'emp': emp_scores,
+                    'emp_frac': emp_fractions}
+    metrics_df = pd.DataFrame(metrics_dict)
+    metrics_df.to_csv(save_path + '/train_metrics.csv', index=False)
+
+    # accuracy report and plot
+    plotting.plot_accuracy(model_name = '',
+                           accuracies_train = model_accuracies_train,
+                           accuracies_val = model_accuracies_val,
+                           save_path = save_path + '/' + model_name + '-',
+                           dpi = 100)
+
+    # f1 score and plot
+    plotting.plot_f1(model_name = '',
+                     f1_train = model_f1_train,
+                     f1_val = model_f1_val,
+                     save_path = save_path + '/' + model_name + '-',
+                     dpi = 100)
+    
+    # precision score and plot
+    plotting.plot_precision(model_name = '',
+                    precision_train = model_precision_train,
+                    precision_val = model_precision_val,
+                    save_path = save_path + '/' + model_name + '-',
+                    dpi = 100)
+
+    # recall score and plot
+    plotting.plot_recall(model_name = '',
+                         recall_train = model_recall_train,
+                         recall_val = model_recall_val,
+                         save_path = save_path + '/' + model_name + '-',
+                         dpi = 100)
+
+    # confusion matrix
+    confusion_matrix_report(model_name = '',
+                            conf_matrix_list = model_conf_matrix_list,
+                            classes = classes,
+                            save_path = save_path + '/' + model_name + '-',
+                            dpi = 100)
+
+    # roc curves and auc scores
+    plotting.plot_roc_auc_scores(model_name = '',
+                                 fprs = model_fpr,
+                                 tprs = model_tpr,
+                                 thresholds = model_thresh,
+                                 save_path = save_path + '/' + model_name + '-',
+                                 dpi = 100)
+    
+    # plot folds gini scores
+    plotting.plot_gini(model_name = '',
+                       gini_scores = gini_scores,
+                       save_path = save_path + '/' + model_name + '-',
+                       dpi = 100)
+
+    # plot folds brier scores
+    plotting.plot_brier(model_name = '',
+                        brier_scores = brier_scores,
+                        save_path = save_path + '/' + model_name + '-',
+                        dpi = 100)
+
+    # plot folds error costs
+    plotting.plot_emp(model_name = '',
+                      emp_scores = emp_scores,
+                      emp_fractions = emp_fractions,
+                      save_path = save_path + '/' + model_name + '-',
+                      dpi = 100)
+
+def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes, k_folds,
                                    features_scores, features, model_name, learning_rate,
-                                   epochs, batch_size, classes, save_path, verbose):
+                                   epochs, batch_size, save_path, verbose):
     """
     Runs k-fold cross validation on the Sequential model built using the given layers.
     """
@@ -176,7 +352,6 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_fold
         model_recall_val.append(metrics.recall_score(val_fold_y, pred_val, classes))
         model_conf_matrix_list.append(metrics.cm_score(test_y, pred_test, classes))
 
-        # collect roc curve statistics
         model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(test_y, pred_probs)
         model_fpr.append(model_fpr_new)
         model_tpr.append(model_tpr_new)
@@ -184,19 +359,13 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_fold
         model_auc_new = metrics.roc_auc_score(test_y, pred_test)
         model_auc.append(model_auc_new)
 
-        # compute fold gini coefficient
         gini_scores.append(metrics.normalized_gini_score(test_y, pred_probs))
-
-        # compute fold brier score
         brier_scores.append(metrics.brier_score(test_y, pred_probs))
-
-        # compute fold missclass error costs
         emp = metrics.emp_score_frac(test_y, pred_probs)
         emp_scores.append(emp.EMPC)
         emp_fractions.append(emp.EMPC_fraction)
 
         if verbose:
-            # current model report
             metrics.classification_report(train_fold_y, pred_train, val_fold_y, pred_val)
 
         print("\n-------- TERMINATED FOLD: " + str(fold_counter) + " --------")
@@ -216,7 +385,7 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_fold
     metrics_df = pd.DataFrame(metrics_dict)
     metrics_df.to_csv(save_path + '/metrics.csv', index=False)
 
-    # accuracy report and plotaccuracy_report
+    # accuracy report and plot
     plotting.plot_accuracy(model_name = '',
                            accuracies_train = model_accuracies_train,
                            accuracies_val = model_accuracies_val,
