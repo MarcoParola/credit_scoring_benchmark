@@ -154,7 +154,7 @@ def classification_report(y_true_train, y_pred_train, y_true_val, y_pred_val):
     print(metrics.classification_report(y_true_train, y_pred_train, labels=[0,1]))
     print(metrics.classification_report(y_true_val, y_pred_val, labels=[0,1]))
 
-def final_report(performance_metrics, save_path, model_name, classes):
+def report_performance_metrics(performance_metrics, save_path, model_name, classes):
     """
     Stores the given performance metrics as a .csv files and plots all
     performance metrics.
