@@ -8,21 +8,17 @@ __author__      = "Rambod Rahmani <rambodrahmani@autistici.org>"
 __copyright__   = "Rambod Rahmani 2023"
 
 import gc
-
 import os
-
 import numpy as np
-
 import pandas as pd
-
 from tqdm import tqdm
 
 from src import pytorch
 from src import plotting
 from src import tensorflow
+from src import metrics
 
 import tensorflow as tf
-from tensorflow.keras import models, regularizers, optimizers
 
 import numpy as np
 from numpy import vstack
@@ -31,14 +27,7 @@ from torch.optim import SGD
 from torch.nn import BCELoss
 
 from datetime import datetime
-
-from collections import Counter
-
 from IPython.display import Markdown, display
-
-from EMP.metrics import empCreditScoring
-
-from sklearn import metrics
 from sklearn.model_selection import StratifiedKFold
 
 def is_dl_model(model):
@@ -60,51 +49,9 @@ def select_k_best_features(features_scores, k, verbose=True, save_path=None):
 
     return list(features_scores.keys())[:k]
 
-def gini_score(y_true, y_prob):
-    """
-    """
-    assert (len(y_true) == len(y_prob))
-    y_true_prob = np.asarray(np.c_[y_true, y_prob, np.arange(len(y_true))], dtype=float)
-    y_true_prob = y_true_prob[np.lexsort((y_true_prob[:, 2], -1 * y_true_prob[:, 1]))]
-    totalLosses = y_true_prob[:, 0].sum()
-    giniSum = y_true_prob[:, 0].cumsum().sum() / totalLosses
-
-    giniSum -= (len(y_true) + 1) / 2.
-    return giniSum / len(y_true)
-
-def normalized_gini_score(y_true, y_prob):
-    """
-    """
-    return gini_score(y_true, y_prob) / gini_score(y_true, y_true)
-
-def brier_score(y_true, y_prob):
-    """
-    """
-    return metrics.brier_score_loss(y_true, y_prob)
-
-def custom_brier_score(y_true, y_prob):
-    """
-    """
-    assert (len(y_true) == len(y_prob))
-    losses = np.subtract(y_true, y_prob)**2
-    brier_score = losses.sum()/len(y_true)
-    return brier_score
-
-def emp_score(y_true, y_prob):
-    """
-    """
-    assert (len(y_true) == len(y_prob))
-    return empCreditScoring(y_prob, y_true, p_0=0.800503355704698, p_1=0.199496644295302, ROI=0.2644, print_output=False)[0]
-
-def emp_score_frac(y_true, y_prob):
-    """
-    """
-    assert (len(y_true) == len(y_prob))
-    return empCreditScoring(y_prob, y_true, p_0=0.800503355704698, p_1=0.199496644295302, ROI=0.2644, print_output=False)
-
 def confusion_matrix_report(model_name, conf_matrix_list, classes, save_path=None, dpi=100):
     """
-    Plots average normalized confusion matrix.
+    Computes average normalized confusion matrix and plots it.
     """
     mean_of_conf_matrix_list = np.mean(conf_matrix_list, axis=0)
 
@@ -131,24 +78,27 @@ def create_model_save_path(model_name):
         os.mkdir(ret)
 
     return ret
-    
+
 def k_fold_cross_validate(layers, train_data, test_data, target, k_folds,
                           features_scores, features, model_name, learning_rate,
                           epochs, batch_size, classes, verbose):
     """
-    Run k-fold cross validation on the Sequential model built using the given layers.
+    Runs k-fold cross validation on the model.
     """
     save_path = create_model_save_path(model_name)
     print('Model save_path: ' + save_path)
 
-    # separate class label from other features
-    train_y = np.array(train_data[target])
-    train_X = train_data.drop([target], axis=1, inplace=False)
-    test_y = np.array(test_data[target])
-    if len(classes) > 2:
-        test_y = tf.one_hot(test_y, len(classes))
-    test_X = test_data.drop([target], axis=1, inplace=False)
+    if len(layers) > 0:
+        k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_folds,
+                                       features_scores, features, model_name, learning_rate,
+                                       epochs, batch_size, classes, save_path, verbose)
 
+def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, k_folds,
+                                   features_scores, features, model_name, learning_rate,
+                                   epochs, batch_size, classes, save_path, verbose):
+    """
+    Runs k-fold cross validation on the Sequential model built using the given layers.
+    """
     # store train and test metrics
     model_accuracies_train = []
     model_accuracies_val = []
@@ -167,6 +117,14 @@ def k_fold_cross_validate(layers, train_data, test_data, target, k_folds,
     brier_scores = []
     emp_scores = []
     emp_fractions = []
+
+    # separate class label from other features
+    train_y = np.array(train_data[target])
+    train_X = train_data.drop([target], axis=1, inplace=False)
+    test_y = np.array(test_data[target])
+    if len(classes) > 2:
+        test_y = tf.one_hot(test_y, len(classes))
+    test_X = test_data.drop([target], axis=1, inplace=False)
 
     # current fold index
     fold_counter = 1
@@ -207,36 +165,19 @@ def k_fold_cross_validate(layers, train_data, test_data, target, k_folds,
                                                                      batch_size, save_path, fold_counter, train_fold_X,
                                                                      train_fold_y, val_fold_X, val_fold_y, test_X, test_y)
 
-        # collect accuracy, f1, precision and recall statistics
-        if len(classes) > 2:
-            model_accuracies_train.append(metrics.accuracy_score(train_fold_y, pred_train))
-            model_accuracies_val.append(metrics.accuracy_score(val_fold_y, pred_val))
-            model_f1_train.append(metrics.f1_score(train_fold_y, pred_train, average='micro'))
-            model_f1_val.append(metrics.f1_score(val_fold_y, pred_val, average='micro'))
-            model_precision_train.append(metrics.precision_score(train_fold_y, pred_train, average='micro'))
-            model_precision_val.append(metrics.precision_score(val_fold_y, pred_val, average='micro'))
-            model_recall_train.append(metrics.recall_score(train_fold_y, pred_train, average='micro'))
-            model_recall_val.append(metrics.recall_score(val_fold_y, pred_val, average='micro'))
-        else:
-            model_accuracies_train.append(metrics.accuracy_score(train_fold_y, pred_train))
-            model_accuracies_val.append(metrics.accuracy_score(val_fold_y, pred_val))
-            model_f1_train.append(metrics.f1_score(train_fold_y, pred_train, pos_label=1))
-            model_f1_val.append(metrics.f1_score(val_fold_y, pred_val, pos_label=1))
-            model_precision_train.append(metrics.precision_score(train_fold_y, pred_train, pos_label=1))
-            model_precision_val.append(metrics.precision_score(val_fold_y, pred_val, pos_label=1))
-            model_recall_train.append(metrics.recall_score(train_fold_y, pred_train, pos_label=1))
-            model_recall_val.append(metrics.recall_score(val_fold_y, pred_val, pos_label=1))
-
-        # confusion matrix score
-        if len(classes) > 2:
-            model_conf_matrix = metrics.confusion_matrix(np.array(test_split[target]), np.argmax(model.predict(test_X), axis=-1))
-            model_conf_matrix_list.append(model_conf_matrix)
-        else:
-            model_conf_matrix = metrics.confusion_matrix(test_y, pred_test)
-            model_conf_matrix_list.append(model_conf_matrix)
+        # collect performance metrics
+        model_accuracies_train.append(metrics.accuracy_score(train_fold_y, pred_train, classes))
+        model_accuracies_val.append(metrics.accuracy_score(val_fold_y, pred_val, classes))
+        model_f1_train.append(metrics.f1_score(train_fold_y, pred_train, classes))
+        model_f1_val.append(metrics.f1_score(val_fold_y, pred_val, classes))
+        model_precision_train.append(metrics.precision_score(train_fold_y, pred_train, classes))
+        model_precision_val.append(metrics.precision_score(val_fold_y, pred_val, classes))
+        model_recall_train.append(metrics.recall_score(train_fold_y, pred_train, classes))
+        model_recall_val.append(metrics.recall_score(val_fold_y, pred_val, classes))
+        model_conf_matrix_list.append(metrics.cm_score(test_y, pred_test, classes))
 
         # collect roc curve statistics
-        model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(test_y, pred_probs, pos_label=1)
+        model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(test_y, pred_probs)
         model_fpr.append(model_fpr_new)
         model_tpr.append(model_tpr_new)
         model_thresh.append(model_thresh_new)
@@ -244,20 +185,19 @@ def k_fold_cross_validate(layers, train_data, test_data, target, k_folds,
         model_auc.append(model_auc_new)
 
         # compute fold gini coefficient
-        gini_scores.append(normalized_gini_score(test_y, pred_probs))
+        gini_scores.append(metrics.normalized_gini_score(test_y, pred_probs))
 
         # compute fold brier score
-        brier_scores.append(brier_score(test_y, pred_probs))
+        brier_scores.append(metrics.brier_score(test_y, pred_probs))
 
         # compute fold missclass error costs
-        emp = emp_score_frac(test_y, pred_probs)
+        emp = metrics.emp_score_frac(test_y, pred_probs)
         emp_scores.append(emp.EMPC)
         emp_fractions.append(emp.EMPC_fraction)
 
         if verbose:
             # current model report
-            print(metrics.classification_report(train_fold_y, pred_train, labels=[0,1]))
-            print(metrics.classification_report(val_fold_y, pred_val, labels=[0,1]))
+            metrics.classification_report(train_fold_y, pred_train, val_fold_y, pred_val)
 
         print("\n-------- TERMINATED FOLD: " + str(fold_counter) + " --------")
 
@@ -341,6 +281,8 @@ def k_fold_cross_validate(layers, train_data, test_data, target, k_folds,
 def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_size, save_path,
                    fold_counter, train_fold_X, train_fold_y, val_fold_X, val_fold_y, test_X, test_y):
     """
+    Trains a Tensorflow model and returns predictions on train, validation and test
+    sets.
     """
     # best fold model save path
     fold_model_save_path = os.path.join(save_path, 'fold-' + str(fold_counter))
@@ -355,7 +297,7 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
     callbacks_list = [best_model_checkpoint, lr_scheduler_callback, val_loss_early_stopping]
 
     # define model to be trained and tested
-    model = models.Sequential(name=model_name + "-" + str(fold_counter))
+    model = tf.keras.models.Sequential(name=model_name + "-" + str(fold_counter))
     for layer in layers:
         model.add(layer)
 
@@ -408,6 +350,8 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
 
     # evaluate the best fold model on the test set
     test_loss, test_accuracy = model.evaluate(test_X, test_y, batch_size=batch_size)
+    print('Test Loss: ' + str(test_loss))
+    print('Test Accuracy: ' + str(test_accuracy))
 
     # test model on train and test set
     if len(classes) > 2:
