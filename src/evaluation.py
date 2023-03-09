@@ -49,17 +49,6 @@ def select_k_best_features(features_scores, k, verbose=True, save_path=None):
 
     return list(features_scores.keys())[:k]
 
-def confusion_matrix_report(model_name, conf_matrix_list, classes, save_path=None, dpi=100):
-    """
-    Computes average normalized confusion matrix and plots it.
-    """
-    mean_of_conf_matrix_list = np.mean(conf_matrix_list, axis=0)
-
-    plotting.plot_confusion_matrix(cnf_matrix=mean_of_conf_matrix_list,
-                                   classes=classes, normalize=True,
-                                   title='Normalized confusion matrix',
-                                   save_path=save_path, dpi=dpi)
-
 def create_model_save_path(model_name):
     """
     Creates train and test results save directory for the given
@@ -104,23 +93,23 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
     Performs K-fold Cross Validation using the given model on the given dataset.
     """
     # store train and test metrics
-    model_accuracies_train = []
-    model_accuracies_val = []
-    model_f1_train = []
-    model_f1_val = []
-    model_precision_train = []
-    model_precision_val = []
-    model_recall_train = []
-    model_recall_val = []
-    model_fpr = []
-    model_tpr = []
-    model_thresh = []
-    model_auc = []
-    model_conf_matrix_list = []
-    gini_scores = []
-    brier_scores = []
-    emp_scores = []
-    emp_fractions = []
+    performance_metrics = {'train_accuracy': [],
+                           'val_accuracy': [],
+                           'train_f1': [],
+                           'val_f1': [],
+                           'train_precision': [],
+                           'val_precision': [],
+                           'train_recall': [],
+                           'val_recall': [],
+                           'fpr': [],
+                           'tpr': [],
+                           'thresh': [],
+                           'auc': [],
+                           'conf_matrix': [],
+                           'gini': [],
+                           'brier': [],
+                           'emp_score': [],
+                           'emp_frac': []}
 
     # separate class label from other features
     train_labels = np.array(train_data[target])
@@ -166,108 +155,35 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
         pred_probs = clf.predict_proba(test_data)[:, 1]
 
         # collect performance metrics
-        model_accuracies_train.append(metrics.accuracy_score(y_train, pred_train, classes))
-        model_accuracies_val.append(metrics.accuracy_score(y_val, pred_val, classes))
-        model_f1_train.append(metrics.f1_score(y_train, pred_train, classes))
-        model_f1_val.append(metrics.f1_score(y_val, pred_val, classes))
-        model_precision_train.append(metrics.precision_score(y_train, pred_train, classes))
-        model_precision_val.append(metrics.precision_score(y_val, pred_val, classes))
-        model_recall_train.append(metrics.recall_score(y_train, pred_train, classes))
-        model_recall_val.append(metrics.recall_score(y_val, pred_val, classes))
-        model_conf_matrix_list.append(metrics.cm_score(test_labels, pred_test, classes))        
+        performance_metrics['train_accuracy'].append(metrics.accuracy_score(y_train, pred_train, classes))
+        performance_metrics['val_accuracy'].append(metrics.accuracy_score(y_val, pred_val, classes))
+        performance_metrics['train_f1'].append(metrics.f1_score(y_train, pred_train, classes))
+        performance_metrics['val_f1'].append(metrics.f1_score(y_val, pred_val, classes))
+        performance_metrics['train_precision'].append(metrics.precision_score(y_train, pred_train, classes))
+        performance_metrics['val_precision'].append(metrics.precision_score(y_val, pred_val, classes))
+        performance_metrics['train_recall'].append(metrics.recall_score(y_train, pred_train, classes))
+        performance_metrics['val_recall'].append(metrics.recall_score(y_val, pred_val, classes))
+        performance_metrics['conf_matrix'].append(metrics.cm_score(test_labels, pred_test, classes))        
 
         model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(test_labels, pred_probs)
-        model_fpr.append(model_fpr_new)
-        model_tpr.append(model_tpr_new)
-        model_thresh.append(model_thresh_new)
+        performance_metrics['fpr'].append(model_fpr_new)
+        performance_metrics['tpr'].append(model_tpr_new)
+        performance_metrics['thresh'].append(model_thresh_new)
         model_auc_new = metrics.roc_auc_score(test_labels, pred_test)
-        model_auc.append(model_auc_new)
+        performance_metrics['auc'].append(model_auc_new)
 
-        gini_scores.append(metrics.normalized_gini_score(test_labels, pred_probs))
-        brier_scores.append(metrics.brier_score(test_labels, pred_probs))
+        performance_metrics['gini'].append(metrics.normalized_gini_score(test_labels, pred_probs))
+        performance_metrics['brier'].append(metrics.brier_score(test_labels, pred_probs))
         emp = metrics.emp_score_frac(test_labels, pred_probs)
-        emp_scores.append(emp.EMPC)
-        emp_fractions.append(emp.EMPC_fraction)
+        performance_metrics['emp_score'].append(emp.EMPC)
+        performance_metrics['emp_frac'].append(emp.EMPC_fraction)
 
         if verbose:
             metrics.classification_report(y_train, pred_train, y_val, pred_val)
 
         fold_counter += 1
 
-    # store metrics as csv file
-    metrics_dict = {'accuracy': model_accuracies_val,
-                    'f1': model_f1_val,
-                    'precision': model_precision_val,
-                    'recall': model_recall_val,
-                    'auc': model_auc,
-                    'gini': gini_scores,
-                    'brier': brier_scores,
-                    'emp': emp_scores,
-                    'emp_frac': emp_fractions}
-    metrics_df = pd.DataFrame(metrics_dict)
-    metrics_df.to_csv(save_path + '/train_metrics.csv', index=False)
-
-    # accuracy report and plot
-    plotting.plot_accuracy(model_name = '',
-                           accuracies_train = model_accuracies_train,
-                           accuracies_val = model_accuracies_val,
-                           save_path = save_path + '/' + model_name + '-',
-                           dpi = 100)
-
-    # f1 score and plot
-    plotting.plot_f1(model_name = '',
-                     f1_train = model_f1_train,
-                     f1_val = model_f1_val,
-                     save_path = save_path + '/' + model_name + '-',
-                     dpi = 100)
-    
-    # precision score and plot
-    plotting.plot_precision(model_name = '',
-                    precision_train = model_precision_train,
-                    precision_val = model_precision_val,
-                    save_path = save_path + '/' + model_name + '-',
-                    dpi = 100)
-
-    # recall score and plot
-    plotting.plot_recall(model_name = '',
-                         recall_train = model_recall_train,
-                         recall_val = model_recall_val,
-                         save_path = save_path + '/' + model_name + '-',
-                         dpi = 100)
-
-    # confusion matrix
-    confusion_matrix_report(model_name = '',
-                            conf_matrix_list = model_conf_matrix_list,
-                            classes = classes,
-                            save_path = save_path + '/' + model_name + '-',
-                            dpi = 100)
-
-    # roc curves and auc scores
-    plotting.plot_roc_auc_scores(model_name = '',
-                                 fprs = model_fpr,
-                                 tprs = model_tpr,
-                                 thresholds = model_thresh,
-                                 save_path = save_path + '/' + model_name + '-',
-                                 dpi = 100)
-    
-    # plot folds gini scores
-    plotting.plot_gini(model_name = '',
-                       gini_scores = gini_scores,
-                       save_path = save_path + '/' + model_name + '-',
-                       dpi = 100)
-
-    # plot folds brier scores
-    plotting.plot_brier(model_name = '',
-                        brier_scores = brier_scores,
-                        save_path = save_path + '/' + model_name + '-',
-                        dpi = 100)
-
-    # plot folds error costs
-    plotting.plot_emp(model_name = '',
-                      emp_scores = emp_scores,
-                      emp_fractions = emp_fractions,
-                      save_path = save_path + '/' + model_name + '-',
-                      dpi = 100)
+    metrics.final_report(performance_metrics, save_path, model_name, classes)
 
 def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes, k_folds,
                                    features_scores, features, model_name, learning_rate,
@@ -276,23 +192,23 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
     Runs k-fold cross validation on the Sequential model built using the given layers.
     """
     # store train and test metrics
-    model_accuracies_train = []
-    model_accuracies_val = []
-    model_f1_train = []
-    model_f1_val = []
-    model_precision_train = []
-    model_precision_val = []
-    model_recall_train = []
-    model_recall_val = []
-    model_fpr = []
-    model_tpr = []
-    model_thresh = []
-    model_auc = []
-    model_conf_matrix_list = []
-    gini_scores = []
-    brier_scores = []
-    emp_scores = []
-    emp_fractions = []
+    performance_metrics = {'train_accuracy': [],
+                           'val_accuracy': [],
+                           'train_f1': [],
+                           'val_f1': [],
+                           'train_precision': [],
+                           'val_precision': [],
+                           'train_recall': [],
+                           'val_recall': [],
+                           'fpr': [],
+                           'tpr': [],
+                           'thresh': [],
+                           'auc': [],
+                           'conf_matrix': [],
+                           'gini': [],
+                           'brier': [],
+                           'emp_score': [],
+                           'emp_frac': []}
 
     # separate class label from other features
     train_y = np.array(train_data[target])
@@ -320,18 +236,18 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
 
         # training and validation data folds
         train_fold = train_data.iloc[train_index]
-        train_fold_y = np.array(train_fold[target])
+        y_train = np.array(train_fold[target])
         if len(classes) > 2:
-            train_fold_y = tf.one_hot(train_fold_y, len(classes))
+            y_train = tf.one_hot(y_train, len(classes))
         train_fold_X = train_fold.drop([target], axis=1, inplace=False)
         if features > 0:
             train_fold_X = train_fold_X[k_best_features]
         train_fold_X = train_fold_X.to_numpy().reshape((train_fold_X.shape[0], train_fold_X.shape[1], 1))
 
         validation_fold = train_data.iloc[validation_index]
-        val_fold_y = np.array(validation_fold[target])
+        y_val = np.array(validation_fold[target])
         if len(classes) > 2:
-            val_fold_y = tf.one_hot(val_fold_y, len(classes))
+            y_val = tf.one_hot(y_val, len(classes))
         val_fold_X = validation_fold.drop([target], axis=1, inplace=False)
         if features > 0:
             val_fold_X = val_fold_X[k_best_features]
@@ -339,116 +255,43 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
 
         pred_train, pred_val, pred_test, pred_probs = train_tf_model(model_name, layers, classes, learning_rate, epochs,
                                                                      batch_size, save_path, fold_counter, train_fold_X,
-                                                                     train_fold_y, val_fold_X, val_fold_y, test_X, test_y)
+                                                                     y_train, val_fold_X, y_val, test_X, test_y)
 
         # collect performance metrics
-        model_accuracies_train.append(metrics.accuracy_score(train_fold_y, pred_train, classes))
-        model_accuracies_val.append(metrics.accuracy_score(val_fold_y, pred_val, classes))
-        model_f1_train.append(metrics.f1_score(train_fold_y, pred_train, classes))
-        model_f1_val.append(metrics.f1_score(val_fold_y, pred_val, classes))
-        model_precision_train.append(metrics.precision_score(train_fold_y, pred_train, classes))
-        model_precision_val.append(metrics.precision_score(val_fold_y, pred_val, classes))
-        model_recall_train.append(metrics.recall_score(train_fold_y, pred_train, classes))
-        model_recall_val.append(metrics.recall_score(val_fold_y, pred_val, classes))
-        model_conf_matrix_list.append(metrics.cm_score(test_y, pred_test, classes))
+        performance_metrics['train_accuracy'].append(metrics.accuracy_score(y_train, pred_train, classes))
+        performance_metrics['val_accuracy'].append(metrics.accuracy_score(y_val, pred_val, classes))
+        performance_metrics['train_f1'].append(metrics.f1_score(y_train, pred_train, classes))
+        performance_metrics['val_f1'].append(metrics.f1_score(y_val, pred_val, classes))
+        performance_metrics['train_precision'].append(metrics.precision_score(y_train, pred_train, classes))
+        performance_metrics['val_precision'].append(metrics.precision_score(y_val, pred_val, classes))
+        performance_metrics['train_recall'].append(metrics.recall_score(y_train, pred_train, classes))
+        performance_metrics['val_recall'].append(metrics.recall_score(y_val, pred_val, classes))
+        performance_metrics['conf_matrix'].append(metrics.cm_score(test_y, pred_test, classes))        
 
         model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(test_y, pred_probs)
-        model_fpr.append(model_fpr_new)
-        model_tpr.append(model_tpr_new)
-        model_thresh.append(model_thresh_new)
+        performance_metrics['fpr'].append(model_fpr_new)
+        performance_metrics['tpr'].append(model_tpr_new)
+        performance_metrics['thresh'].append(model_thresh_new)
         model_auc_new = metrics.roc_auc_score(test_y, pred_test)
-        model_auc.append(model_auc_new)
+        performance_metrics['auc'].append(model_auc_new)
 
-        gini_scores.append(metrics.normalized_gini_score(test_y, pred_probs))
-        brier_scores.append(metrics.brier_score(test_y, pred_probs))
+        performance_metrics['gini'].append(metrics.normalized_gini_score(test_y, pred_probs))
+        performance_metrics['brier'].append(metrics.brier_score(test_y, pred_probs))
         emp = metrics.emp_score_frac(test_y, pred_probs)
-        emp_scores.append(emp.EMPC)
-        emp_fractions.append(emp.EMPC_fraction)
+        performance_metrics['emp_score'].append(emp.EMPC)
+        performance_metrics['emp_frac'].append(emp.EMPC_fraction)
 
         if verbose:
-            metrics.classification_report(train_fold_y, pred_train, val_fold_y, pred_val)
+            metrics.classification_report(y_train, pred_train, y_val, pred_val)
 
         print("\n-------- TERMINATED FOLD: " + str(fold_counter) + " --------")
 
         fold_counter += 1
 
-    # store metrics as csv file
-    metrics_dict = {'accuracy': model_accuracies_val,
-                    'f1': model_f1_val,
-                    'precision': model_precision_val,
-                    'recall': model_recall_val,
-                    'auc': model_auc,
-                    'gini': gini_scores,
-                    'brier': brier_scores,
-                    'emp': emp_scores,
-                    'emp_frac': emp_fractions}
-    metrics_df = pd.DataFrame(metrics_dict)
-    metrics_df.to_csv(save_path + '/metrics.csv', index=False)
-
-    # accuracy report and plot
-    plotting.plot_accuracy(model_name = '',
-                           accuracies_train = model_accuracies_train,
-                           accuracies_val = model_accuracies_val,
-                           save_path = save_path + '/' + model_name + '-',
-                           dpi = 100)
-
-    # f1 score and plot
-    plotting.plot_f1(model_name = '',
-                     f1_train = model_f1_train,
-                     f1_val = model_f1_val,
-                     save_path = save_path + '/' + model_name + '-',
-                     dpi = 100)
-    
-    # precision score and plot
-    plotting.plot_precision(model_name = '',
-                    precision_train = model_precision_train,
-                    precision_val = model_precision_val,
-                    save_path = save_path + '/' + model_name + '-',
-                    dpi = 100)
-
-    # recall score and plot
-    plotting.plot_recall(model_name = '',
-                         recall_train = model_recall_train,
-                         recall_val = model_recall_val,
-                         save_path = save_path + '/' + model_name + '-',
-                         dpi = 100)
-
-    # confusion matrix
-    confusion_matrix_report(model_name = '',
-                            conf_matrix_list = model_conf_matrix_list,
-                            classes = classes,
-                            save_path = save_path + '/' + model_name + '-',
-                            dpi = 100)
-
-    # roc curves and auc scores
-    plotting.plot_roc_auc_scores(model_name = '',
-                                 fprs = model_fpr,
-                                 tprs = model_tpr,
-                                 thresholds = model_thresh,
-                                 save_path = save_path + '/' + model_name + '-',
-                                 dpi = 100)
-    
-    # plot folds gini scores
-    plotting.plot_gini(model_name = '',
-                       gini_scores = gini_scores,
-                       save_path = save_path + '/' + model_name + '-',
-                       dpi = 100)
-
-    # plot folds brier scores
-    plotting.plot_brier(model_name = '',
-                        brier_scores = brier_scores,
-                        save_path = save_path + '/' + model_name + '-',
-                        dpi = 100)
-
-    # plot folds error costs
-    plotting.plot_emp(model_name = '',
-                      emp_scores = emp_scores,
-                      emp_fractions = emp_fractions,
-                      save_path = save_path + '/' + model_name + '-',
-                      dpi = 100)
+    metrics.final_report(performance_metrics, save_path, model_name, classes)
 
 def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_size, save_path,
-                   fold_counter, train_fold_X, train_fold_y, val_fold_X, val_fold_y, test_X, test_y):
+                   fold_counter, train_fold_X, y_train, val_fold_X, y_val, test_X, test_y):
     """
     Trains a Tensorflow model and returns predictions on train, validation and test
     sets.
@@ -498,11 +341,11 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
 
     # train model
     history = model.fit(train_fold_X,
-                        train_fold_y,
+                        y_train,
                         epochs=epochs,
                         callbacks=callbacks_list,
                         batch_size=batch_size,
-                        validation_data=(val_fold_X, val_fold_y))
+                        validation_data=(val_fold_X, y_val))
 
     # plot learning rate decay
     step_decay_schedule.plot(np.arange(0, epochs), figsize=(7, 7),
