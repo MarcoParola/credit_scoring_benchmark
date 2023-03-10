@@ -38,6 +38,9 @@ def select_k_best_features(features_scores, k, verbose=True, save_path=None):
     Selects the k best features based on the scores obtained using different
     features slection techniques.
     """
+    features_scores = sorted(features_scores.items(), key=lambda x: x[1], reverse=True)
+    features_scores = dict(features_scores)
+
     if verbose:
         plotting.plot_features_scores(list(features_scores.keys())[:k],
                              list(features_scores.values())[:k],
@@ -65,20 +68,34 @@ def create_model_save_path(model_name):
 
     return ret
 
-def collect_performance_metrics(metrics_dict, y_train, pred_train, y_val, pred_val, y_test,
-                                pred_test, pred_probs, classes):
+def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
+                         y_test, pred_test, pred_probs, classes):
     """
     Computes and collects performance metrics based on the given predictions and
     groudtruth.
     """
+    if not len(metrics_dict) > 0:
+        metrics_dict = {'train_accuracy': [], 'train_f1': [], 'train_precision': [], 'train_recall': [],
+                        'val_accuracy': [], 'val_f1': [], 'val_precision': [], 'val_recall': [],
+                        'test_accuracy': [], 'test_f1': [], 'test_precision': [], 'test_recall': [],
+                        'fpr': [], 'tpr': [], 'thresh': [], 'auc': [], 'conf_matrix': [],
+                        'gini': [], 'brier': [], 'emp_score': [], 'emp_frac': []}
+
     metrics_dict['train_accuracy'].append(metrics.accuracy_score(y_train, pred_train, classes))
-    metrics_dict['val_accuracy'].append(metrics.accuracy_score(y_val, pred_val, classes))
     metrics_dict['train_f1'].append(metrics.f1_score(y_train, pred_train, classes))
-    metrics_dict['val_f1'].append(metrics.f1_score(y_val, pred_val, classes))
     metrics_dict['train_precision'].append(metrics.precision_score(y_train, pred_train, classes))
-    metrics_dict['val_precision'].append(metrics.precision_score(y_val, pred_val, classes))
     metrics_dict['train_recall'].append(metrics.recall_score(y_train, pred_train, classes))
+
+    metrics_dict['val_accuracy'].append(metrics.accuracy_score(y_val, pred_val, classes))
+    metrics_dict['val_f1'].append(metrics.f1_score(y_val, pred_val, classes))
+    metrics_dict['val_precision'].append(metrics.precision_score(y_val, pred_val, classes))
     metrics_dict['val_recall'].append(metrics.recall_score(y_val, pred_val, classes))
+
+    metrics_dict['test_accuracy'].append(metrics.accuracy_score(y_test, pred_test, classes))
+    metrics_dict['test_f1'].append(metrics.f1_score(y_test, pred_test, classes))
+    metrics_dict['test_precision'].append(metrics.precision_score(y_test, pred_test, classes))
+    metrics_dict['test_recall'].append(metrics.recall_score(y_test, pred_test, classes))
+
     metrics_dict['conf_matrix'].append(metrics.cm_score(y_test, pred_test, classes))        
 
     model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(y_test, pred_probs)
@@ -94,6 +111,8 @@ def collect_performance_metrics(metrics_dict, y_train, pred_train, y_val, pred_v
     metrics_dict['emp_score'].append(emp.EMPC)
     metrics_dict['emp_frac'].append(emp.EMPC_fraction)
 
+    return metrics_dict
+
 def k_fold_cross_validate(clf, layers, train_data, test_data, target, classes, k_folds,
                           features_scores, features, model_name, learning_rate,
                           epochs, batch_size, verbose):
@@ -103,48 +122,30 @@ def k_fold_cross_validate(clf, layers, train_data, test_data, target, classes, k
     save_path = create_model_save_path(model_name)
     print('Model save_path: ' + save_path)
 
-    metrics_dict = {'train_accuracy': [],
-                    'val_accuracy': [],
-                    'train_f1': [],
-                    'val_f1': [],
-                    'train_precision': [],
-                    'val_precision': [],
-                    'train_recall': [],
-                    'val_recall': [],
-                    'fpr': [],
-                    'tpr': [],
-                    'thresh': [],
-                    'auc': [],
-                    'conf_matrix': [],
-                    'gini': [],
-                    'brier': [],
-                    'emp_score': [],
-                    'emp_frac': []}
-
     if layers is not None:
         k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes,
                                        k_folds, features_scores, features, model_name,
                                        learning_rate, epochs, batch_size, save_path,
-                                       metrics_dict, verbose)
+                                       verbose)
     else:
         k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
                                        k_folds, features_scores, features, model_name,
-                                       save_path, metrics_dict, verbose)
+                                       save_path, verbose)
 
 def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
                                    k_folds, features_scores, features, model_name,
-                                   save_path, metrics_dict, verbose):
+                                   save_path, verbose):
     """
     Performs K-fold Cross Validation using the given model on the given dataset.
     """
+    metrics_dict = {}
+
     # separate class label from other features
     train_labels = np.array(train_data[target])
     train_data = train_data.drop([target], axis=1, inplace=False)
-    train_data = train_data.select_dtypes(include=['float64', 'int64', 'bool'])
 
     y_test = np.array(test_data[target])
-    test_data = test_data.drop([target], axis=1, inplace=False)
-    test_data = test_data.select_dtypes(include=['float64', 'int64', 'bool'])
+    X_test = test_data.drop([target], axis=1, inplace=False)
 
     # current fold index
     fold_counter = 1
@@ -169,7 +170,7 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
         if features > 0:
             X_train = X_train[k_best_features]
             X_val = X_val[k_best_features]
-            test_data = test_data[k_best_features]
+            X_test = X_test[k_best_features]
 
         # train model
         clf = clf.fit(X_train, y_train)
@@ -177,11 +178,11 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
         # test model on train and test set
         pred_train = clf.predict(X_train)
         pred_val = clf.predict(X_val)
-        pred_test = clf.predict(test_data)
-        pred_probs = clf.predict_proba(test_data)[:, 1]
+        pred_test = clf.predict(X_test)
+        pred_probs = clf.predict_proba(X_test)[:, 1]
 
-        collect_performance_metrics(metrics_dict, y_train, pred_train, y_val,
-                                    pred_val, y_test, pred_test, pred_probs, classes)
+        metrics_dict = collect_perf_metrics(metrics_dict, y_train, pred_train, y_val,
+                                            pred_val, y_test, pred_test, pred_probs, classes)
 
         if verbose:
             metrics.classification_report(y_train, pred_train, y_val, pred_val)
@@ -192,17 +193,20 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
 
 def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes, k_folds,
                                    features_scores, features, model_name, learning_rate,
-                                   epochs, batch_size, save_path, metrics_dict, verbose):
+                                   epochs, batch_size, save_path, verbose):
     """
     Runs k-fold cross validation on the Sequential model built using the given layers.
     """
+    metrics_dict = {}
+
     # separate class label from other features
-    train_y = np.array(train_data[target])
-    train_X = train_data.drop([target], axis=1, inplace=False)
+    train_labels = np.array(train_data[target])
+    train_data = train_data.drop([target], axis=1, inplace=False)
+
     y_test = np.array(test_data[target])
     if len(classes) > 2:
         y_test = tensorflow.one_hot(y_test, len(classes))
-    test_X = test_data.drop([target], axis=1, inplace=False)
+    X_test = test_data.drop([target], axis=1, inplace=False)
 
     # current fold index
     fold_counter = 1
@@ -211,40 +215,38 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
     if features > 0:
         k_best_features = select_k_best_features(features_scores, features, verbose)
         print('Selected Features: ' + str(k_best_features))
-        test_X = test_X[k_best_features]
-    test_X = test_X.to_numpy().reshape((test_X.shape[0], test_X.shape[1], 1))
+        X_test = X_test[k_best_features]
+    X_test = X_test.to_numpy().reshape((X_test.shape[0], X_test.shape[1], 1))
 
     # k-fold cross validation
     skf = StratifiedKFold(n_splits=k_folds, shuffle=True)
-    for train_index, validation_index in tqdm(skf.split(train_X, train_y)):
+    for train_index, val_index in tqdm(skf.split(train_data, train_labels)):
         if verbose:
             display(Markdown("# **FOLD " + str(fold_counter) + "**"))
 
         # training and validation data folds
-        train_fold = train_data.iloc[train_index]
-        y_train = np.array(train_fold[target])
+        y_train = train_labels[train_index]
         if len(classes) > 2:
             y_train = tensorflow.one_hot(y_train, len(classes))
-        X_train = train_fold.drop([target], axis=1, inplace=False)
+        X_train = train_data.iloc[train_index]
         if features > 0:
             X_train = X_train[k_best_features]
         X_train = X_train.to_numpy().reshape((X_train.shape[0], X_train.shape[1], 1))
 
-        validation_fold = train_data.iloc[validation_index]
-        y_val = np.array(validation_fold[target])
+        y_val = train_labels[val_index]
         if len(classes) > 2:
             y_val = tensorflow.one_hot(y_val, len(classes))
-        val_fold_X = validation_fold.drop([target], axis=1, inplace=False)
+        X_val = train_data.iloc[val_index]
         if features > 0:
-            val_fold_X = val_fold_X[k_best_features]
-        val_fold_X = val_fold_X.to_numpy().reshape((val_fold_X.shape[0], val_fold_X.shape[1], 1))
+            X_val = X_val[k_best_features]
+        X_val = X_val.to_numpy().reshape((X_val.shape[0], X_val.shape[1], 1))
 
         pred_train, pred_val, pred_test, pred_probs = train_tf_model(model_name, layers, classes, learning_rate, epochs,
                                                                      batch_size, save_path, fold_counter, X_train,
-                                                                     y_train, val_fold_X, y_val, test_X, y_test)
+                                                                     y_train, X_val, y_val, X_test, y_test)
 
-        collect_performance_metrics(metrics_dict, y_train, pred_train, y_val,
-                                    pred_val, y_test, pred_test, pred_probs, classes)
+        metrics_dict = collect_perf_metrics(metrics_dict, y_train, pred_train, y_val,
+                                            pred_val, y_test, pred_test, pred_probs, classes)
 
         if verbose:
             metrics.classification_report(y_train, pred_train, y_val, pred_val)
@@ -256,7 +258,7 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
     metrics.report_performance_metrics(metrics_dict, save_path, model_name, classes)
 
 def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_size, save_path,
-                   fold_counter, X_train, y_train, val_fold_X, y_val, test_X, y_test):
+                   fold_counter, X_train, y_train, X_val, y_val, X_test, y_test):
     """
     Trains a Tensorflow model and returns predictions on train, validation and test
     sets.
@@ -305,7 +307,7 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
                         epochs=epochs,
                         callbacks=callbacks_list,
                         batch_size=batch_size,
-                        validation_data=(val_fold_X, y_val))
+                        validation_data=(X_val, y_val))
 
     # plot learning rate decay
     lr_scheduler.plot(np.arange(0, epochs), figsize=(7, 7),
@@ -321,24 +323,24 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
     model.load_weights(fold_model_save_path)
 
     # evaluate the best fold model on the test set
-    test_loss, test_accuracy = model.evaluate(test_X, y_test, batch_size=batch_size)
+    test_loss, test_accuracy = model.evaluate(X_test, y_test, batch_size=batch_size)
     print('Test Loss: ' + str(test_loss))
     print('Test Accuracy: ' + str(test_accuracy))
 
-    # test model on train and test set
+    # test model on train, val and test sets
     if len(classes) > 2:
         pred_train = np.argmax(model.predict(X_train), axis=-1)
         pred_train = tensorflow.one_hot(pred_train, len(classes))
-        pred_val = np.argmax(model.predict(val_fold_X), axis=-1)
+        pred_val = np.argmax(model.predict(X_val), axis=-1)
         pred_val = tensorflow.one_hot(pred_val, len(classes))
-        pred_test = np.argmax(model.predict(test_X), axis=-1)
+        pred_test = np.argmax(model.predict(X_test), axis=-1)
         pred_test = tensorflow.one_hot(pred_test, len(classes))
-        pred_probs = np.argmax(model.predict(test_X), axis=-1)
+        pred_probs = np.argmax(model.predict(X_test), axis=-1)
     else:
         pred_train = (model.predict(X_train) > 0.5).astype("int32")
-        pred_val = (model.predict(val_fold_X) > 0.5).astype("int32")
-        pred_test = (model.predict(test_X) > 0.5).astype("int32")
-        pred_probs = np.concatenate(model.predict(test_X))
+        pred_val = (model.predict(X_val) > 0.5).astype("int32")
+        pred_test = (model.predict(X_test) > 0.5).astype("int32")
+        pred_probs = np.concatenate(model.predict(X_test))
 
     # clean up model
     model = None

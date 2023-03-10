@@ -160,17 +160,28 @@ def report_performance_metrics(performance_metrics, save_path, model_name, class
     performance metrics.
     """
     # store metrics as csv file
-    metrics_dict = {'accuracy': performance_metrics['val_accuracy'],
-                    'f1': performance_metrics['val_f1'],
-                    'precision': performance_metrics['val_precision'],
-                    'recall': performance_metrics['val_recall'],
+    metrics_dict = {'train_accuracy': performance_metrics['train_accuracy'],
+                    'train_f1': performance_metrics['train_f1'],
+                    'train_precision': performance_metrics['train_precision'],
+                    'train_recall': performance_metrics['train_recall'],
+
+                    'val_accuracy': performance_metrics['val_accuracy'],
+                    'val_f1': performance_metrics['val_f1'],
+                    'val_precision': performance_metrics['val_precision'],
+                    'val_recall': performance_metrics['val_recall'],
+
+                    'test_accuracy': performance_metrics['test_accuracy'],
+                    'test_f1': performance_metrics['test_f1'],
+                    'test_precision': performance_metrics['test_precision'],
+                    'test_recall': performance_metrics['test_recall'],
+
                     'auc': performance_metrics['auc'],
                     'gini': performance_metrics['gini'],
                     'brier': performance_metrics['brier'],
                     'emp': performance_metrics['emp_score'],
                     'emp_frac': performance_metrics['emp_frac']}
     metrics_df = pd.DataFrame(metrics_dict)
-    metrics_df.to_csv(save_path + '/train_metrics.csv', index=False)
+    metrics_df.to_csv(save_path + '/perf_metrics.csv', index=False)
 
     plot_save_path = save_path + '/' + model_name + '-'
 

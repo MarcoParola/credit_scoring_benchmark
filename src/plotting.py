@@ -8,17 +8,11 @@ __author__      = "Rambod Rahmani <rambodrahmani@autistici.org>"
 __copyright__   = "Rambod Rahmani 2023"
 
 import os
-
 import itertools
-
 import numpy as np
-
 import pandas as pd
-
 import seaborn as sns
-
 import matplotlib.pyplot as plt
-
 from sklearn.metrics import precision_recall_curve, auc
 
 def plot_hist(labels, values, title, xlabel, ylabel, figsize=(5,5),
