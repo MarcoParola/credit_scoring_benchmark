@@ -464,6 +464,25 @@ def plot_brier(model_name, brier_scores, save_path=None, dpi=100):
     # print average values
     print("Average Brier Score: " + str(np.mean(brier_scores)))
 
+def plot_hmeasure(model_name, hmeasure_scores, save_path=None, dpi=100):
+    """
+    """
+    plt.style.use("ggplot")
+    fig, ax = plt.subplots(figsize=(7, 3), dpi=dpi, facecolor='w', edgecolor='k')
+
+    ax.plot(range(1, len(hmeasure_scores)+1), hmeasure_scores, '-o')
+    plt.xticks(range(1, len(hmeasure_scores)+1))
+    fig.suptitle(model_name, fontsize=18, y=0.99)
+    ax.legend(['H-Measure Score'], loc='best', prop={'size': 10})
+
+    if save_path is not None:
+        plt.savefig(save_path + 'hmeasure.pdf', format="pdf", bbox_inches="tight")
+
+    plt.show()
+
+    # print average values
+    print("Average H-Measure Score: " + str(np.mean(hmeasure_scores)))
+
 def plot_emp(model_name, emp_scores, emp_fractions, save_path=None, dpi=100):
     """
     """
