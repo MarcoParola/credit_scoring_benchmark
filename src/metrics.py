@@ -12,67 +12,8 @@ from src import plotting
 import numpy as np
 import pandas as pd
 from sklearn import metrics
+from hmeasure import h_score
 from EMP.metrics import empCreditScoring
-
-def gini_score(y_true, y_prob):
-    """
-    Computes the gini score (Somers'D).
-    """
-    assert (len(y_true) == len(y_prob))
-    y_true_prob = np.asarray(np.c_[y_true, y_prob, np.arange(len(y_true))], dtype=float)
-    y_true_prob = y_true_prob[np.lexsort((y_true_prob[:, 2], -1 * y_true_prob[:, 1]))]
-    totalLosses = y_true_prob[:, 0].sum()
-    giniSum = y_true_prob[:, 0].cumsum().sum() / totalLosses
-
-    giniSum -= (len(y_true) + 1) / 2.
-    return giniSum / len(y_true)
-
-def normalized_gini_score(y_true, y_prob):
-    """
-    Computes the normalized gini score (Somers'D).
-    """
-    return gini_score(y_true, y_prob) / gini_score(y_true, y_true)
-
-def brier_score(y_true, y_prob):
-    """
-    Computes the Brier Score using sklearn.metrics.
-    """
-    return metrics.brier_score_loss(y_true, y_prob)
-
-def custom_brier_score(y_true, y_prob):
-    """
-    Computes the Brier Score using a custom implementation.
-    """
-    assert (len(y_true) == len(y_prob))
-    losses = np.subtract(y_true, y_prob)**2
-    brier_score = losses.sum()/len(y_true)
-    return brier_score
-
-def emp_score(y_true, y_prob):
-    """
-    Computes the expected maximum profit maximization score. It only returns the
-    score.
-    """
-    assert (len(y_true) == len(y_prob))
-    return empCreditScoring(y_prob, y_true, p_0=0.800503355704698, p_1=0.199496644295302, ROI=0.2644, print_output=False)[0]
-
-def emp_score_frac(y_true, y_prob):
-    """
-    Computes the expected maximum profit maximization score. It returns both the
-    score and the fraction of excluded.
-    """
-    assert (len(y_true) == len(y_prob))
-    return empCreditScoring(y_prob, y_true, p_0=0.800503355704698, p_1=0.199496644295302, ROI=0.2644, print_output=False)
-
-def accuracy_score(y_true, y_pred, classes):
-    """
-    Computes the accuracy using sklearn.metrics.accuracy_score().
-    It handles binary and multi-class classification.
-    """
-    if len(classes) > 2:
-        return metrics.accuracy_score(y_true, y_pred)
-    else:
-        return metrics.accuracy_score(y_true, y_pred)
 
 def accuracy_score(y_true, y_pred, classes):
     """
@@ -113,6 +54,65 @@ def recall_score(y_true, y_pred, classes):
         return metrics.recall_score(y_true, y_pred, average='micro')
     else:
         return metrics.recall_score(y_true, y_pred, pos_label=1)
+
+def gini_score(y_true, y_pred):
+    """
+    Computes the gini score (Somers'D).
+    """
+    assert (len(y_true) == len(y_pred))
+    y_true_prob = np.asarray(np.c_[y_true, y_pred, np.arange(len(y_true))], dtype=float)
+    y_true_prob = y_true_prob[np.lexsort((y_true_prob[:, 2], -1 * y_true_prob[:, 1]))]
+    totalLosses = y_true_prob[:, 0].sum()
+    giniSum = y_true_prob[:, 0].cumsum().sum() / totalLosses
+
+    giniSum -= (len(y_true) + 1) / 2.
+    return giniSum / len(y_true)
+
+def normalized_gini_score(y_true, y_pred):
+    """
+    Computes the normalized gini score (Somers'D).
+    """
+    return gini_score(y_true, y_pred) / gini_score(y_true, y_true)
+
+def brier_score(y_true, y_pred):
+    """
+    Computes the Brier Score using sklearn.metrics.
+    """
+    return metrics.brier_score_loss(y_true, y_pred)
+
+def custom_brier_score(y_true, y_pred):
+    """
+    Computes the Brier Score using a custom implementation.
+    """
+    assert (len(y_true) == len(y_pred))
+    losses = np.subtract(y_true, y_pred)**2
+    brier_score = losses.sum()/len(y_true)
+    return brier_score
+
+def h_measure(y_true, y_pred):
+    """
+    Computes the H-Measure score.
+    """
+    assert (len(y_true) == len(y_pred))
+    return h_score(y_true, y_pred)
+
+def emp_score(y_true, y_pred):
+    """
+    Computes the expected maximum profit maximization score. It only returns the
+    score.
+    """
+    assert (len(y_true) == len(y_pred))
+    return empCreditScoring(y_pred, y_true, p_0=0.800503355704698, p_1=0.199496644295302,
+                            ROI=0.2644, print_output=False)[0]
+
+def emp_score_frac(y_true, y_pred):
+    """
+    Computes the expected maximum profit maximization score. It returns both the
+    score and the fraction of excluded.
+    """
+    assert (len(y_true) == len(y_pred))
+    return empCreditScoring(y_pred, y_true, p_0=0.800503355704698, p_1=0.199496644295302,
+                            ROI=0.2644, print_output=False)
 
 def cm_score(y_true, y_pred, classes):
     """
@@ -178,6 +178,7 @@ def report_performance_metrics(performance_metrics, save_path, model_name, class
                     'auc': performance_metrics['auc'],
                     'gini': performance_metrics['gini'],
                     'brier': performance_metrics['brier'],
+                    'h_measure': performance_metrics['h_measure'],
                     'emp': performance_metrics['emp_score'],
                     'emp_frac': performance_metrics['emp_frac']}
     metrics_df = pd.DataFrame(metrics_dict)
@@ -239,6 +240,12 @@ def report_performance_metrics(performance_metrics, save_path, model_name, class
                         brier_scores = performance_metrics['brier'],
                         save_path = plot_save_path,
                         dpi = 100)
+
+    # plot folds h-measure scores
+    plotting.plot_hmeasure(model_name = '',
+                           hmeasure_scores = performance_metrics['h_measure'],
+                           save_path = plot_save_path,
+                           dpi = 100)
 
     # plot folds error costs
     plotting.plot_emp(model_name = '',

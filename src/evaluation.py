@@ -79,7 +79,7 @@ def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
                         'val_accuracy': [], 'val_f1': [], 'val_precision': [], 'val_recall': [],
                         'test_accuracy': [], 'test_f1': [], 'test_precision': [], 'test_recall': [],
                         'fpr': [], 'tpr': [], 'thresh': [], 'auc': [], 'conf_matrix': [],
-                        'gini': [], 'brier': [], 'emp_score': [], 'emp_frac': []}
+                        'gini': [], 'brier': [], 'h_measure':[], 'emp_score': [], 'emp_frac': []}
 
     metrics_dict['train_accuracy'].append(metrics.accuracy_score(y_train, pred_train, classes))
     metrics_dict['train_f1'].append(metrics.f1_score(y_train, pred_train, classes))
@@ -105,9 +105,10 @@ def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
     model_auc_new = metrics.roc_auc_score(y_test, pred_test)
     metrics_dict['auc'].append(model_auc_new)
 
-    metrics_dict['gini'].append(metrics.normalized_gini_score(y_test, pred_probs))
-    metrics_dict['brier'].append(metrics.brier_score(y_test, pred_probs))
-    emp = metrics.emp_score_frac(y_test, pred_probs)
+    metrics_dict['gini'].append(metrics.normalized_gini_score(y_test, pred_test))
+    metrics_dict['brier'].append(metrics.brier_score(y_test, pred_test))
+    metrics_dict['h_measure'].append(metrics.h_measure(y_test, pred_test))
+    emp = metrics.emp_score_frac(y_test, pred_test)
     metrics_dict['emp_score'].append(emp.EMPC)
     metrics_dict['emp_frac'].append(emp.EMPC_fraction)
 
