@@ -29,9 +29,24 @@ from sklearn.model_selection import StratifiedKFold
 
 def is_dl_model(model):
     """
-    Checks if the given model is based on PyTorch.
+    Checks if the given model is based on PyTorch or Tensorflow.
     """
-    return 'pytorch' in model.__class__.__module__
+    model_type = str(type(model))
+    return is_dl_layers(model) or 'keras' in model_type or 'pytorch' in model_type
+
+def is_dl_layers(model):
+    """
+    Checks if the given Tensorflow model is based on layers.
+    """
+    model_type = str(type(model))
+    return 'list' in model_type
+
+def is_ml_model(model):
+    """
+    Checks if the given model is based on Scikit-Learn.
+    """
+    model_type = str(type(model))
+    return 'sklearn' in model_type
 
 def select_k_best_features(features_scores, k, verbose=True, save_path=None):
     """
@@ -118,7 +133,7 @@ def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
 
     return metrics_dict
 
-def k_fold_cross_validate(model, layers, train_data, test_data, target, classes,
+def k_fold_cross_validate(model, train_data, test_data, target, classes,
                           k_folds, features_scores, features, model_name,
                           learning_rate, epochs, batch_size, verbose):
     """
@@ -127,12 +142,12 @@ def k_fold_cross_validate(model, layers, train_data, test_data, target, classes,
     save_path = create_model_save_path(model_name)
     print('Model save_path: ' + save_path)
 
-    if layers is not None:
-        k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes,
+    if is_dl_model(model):
+        k_fold_cross_validate_dl_model(model, train_data, test_data, target, classes,
                                        k_folds, features_scores, features, model_name,
                                        learning_rate, epochs, batch_size, save_path,
                                        verbose)
-    elif model is not None:
+    elif is_ml_model(model):
         k_fold_cross_validate_ml_model(model, train_data, test_data, target, classes,
                                        k_folds, features_scores, features, model_name,
                                        save_path, verbose)
@@ -312,9 +327,12 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
     callbacks_list = [checkpoint_callback, lrs_callback, early_stopping_callback]
 
     # define model to be trained and tested
-    model = tensorflow.sequential_model(name=model_name + "-" + str(fold_counter))
-    for layer in layers:
-        model.add(layer)
+    if is_dl_layers(layers):
+        model = tensorflow.sequential_model(name=model_name + "-" + str(fold_counter))
+        for layer in layers:
+            model.add(layer)
+    else:
+        model = layers
 
     # make sure models weights are initialed randomly at each fold
     if fold_counter == 1:
@@ -336,8 +354,7 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
                           show_shapes=True, rankdir="TB", dpi=200)
 
     # train model
-    history = model.fit(X_train,
-                        y_train,
+    history = model.fit(X_train, y_train,
                         epochs=epochs,
                         callbacks=callbacks_list,
                         batch_size=batch_size,
