@@ -483,6 +483,26 @@ def plot_hmeasure(model_name, hmeasure_scores, save_path=None, dpi=100):
     # print average values
     print("Average H-Measure Score: " + str(np.mean(hmeasure_scores)))
 
+def plot_kstest(model_name, ks_statistic, ks_pvalue, save_path=None, dpi=100):
+    """
+    """
+    plt.style.use("ggplot")
+    fig, ax = plt.subplots(figsize=(7, 3), dpi=dpi, facecolor='w', edgecolor='k')
+
+    ax.plot(range(1, len(ks_statistic)+1), ks_statistic, '-o', range(1, len(ks_pvalue)+1), ks_pvalue, '-o')
+    plt.xticks(range(1, len(ks_statistic)+1))
+    fig.suptitle(model_name, fontsize=18, y=0.99)
+    ax.legend(['KS Statistic', 'KS p-value'], loc='best', prop={'size': 10})
+
+    if save_path is not None:
+        plt.savefig(save_path + 'accuracy.pdf', format="pdf", bbox_inches="tight")
+
+    plt.show()
+
+    # print average values
+    print("Average Kolmogorov-Smirnov Statistic: " + str(np.mean(ks_statistic)))
+    print("Average Kolmogorov-Smirnov p-value: " + str(np.mean(ks_pvalue)))
+
 def plot_emp(model_name, emp_scores, emp_fractions, save_path=None, dpi=100):
     """
     """

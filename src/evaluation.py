@@ -69,17 +69,18 @@ def create_model_save_path(model_name):
     return ret
 
 def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
-                         y_test, pred_test, pred_probs, classes):
+                         y_test, pred_test, test_probs, classes):
     """
     Computes and collects performance metrics based on the given predictions and
     groudtruth.
     """
     if not len(metrics_dict) > 0:
-        metrics_dict = {'train_accuracy': [], 'train_f1': [], 'train_precision': [], 'train_recall': [],
-                        'val_accuracy': [], 'val_f1': [], 'val_precision': [], 'val_recall': [],
-                        'test_accuracy': [], 'test_f1': [], 'test_precision': [], 'test_recall': [],
-                        'fpr': [], 'tpr': [], 'thresh': [], 'auc': [], 'conf_matrix': [],
-                        'gini': [], 'brier': [], 'h_measure':[], 'emp_score': [], 'emp_frac': []}
+        metrics_dict = {'train_accuracy':[], 'train_f1':[], 'train_precision':[], 'train_recall':[],
+                        'val_accuracy':[], 'val_f1':[], 'val_precision':[], 'val_recall':[],
+                        'test_accuracy':[], 'test_f1':[], 'test_precision':[], 'test_recall':[],
+                        'fpr':[], 'tpr':[], 'thresh':[], 'auc':[], 'conf_matrix':[], 'gini':[],
+                        'brier':[], 'h_measure':[], 'ks_statistic':[], 'ks_pvalue':[],
+                        'emp_score':[], 'emp_frac':[]}
 
     metrics_dict['train_accuracy'].append(metrics.accuracy_score(y_train, pred_train, classes))
     metrics_dict['train_f1'].append(metrics.f1_score(y_train, pred_train, classes))
@@ -98,7 +99,7 @@ def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
 
     metrics_dict['conf_matrix'].append(metrics.cm_score(y_test, pred_test, classes))        
 
-    model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(y_test, pred_probs)
+    model_fpr_new, model_tpr_new, model_thresh_new = metrics.roc_curve(y_test, test_probs)
     metrics_dict['fpr'].append(model_fpr_new)
     metrics_dict['tpr'].append(model_tpr_new)
     metrics_dict['thresh'].append(model_thresh_new)
@@ -108,6 +109,9 @@ def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
     metrics_dict['gini'].append(metrics.normalized_gini_score(y_test, pred_test))
     metrics_dict['brier'].append(metrics.brier_score(y_test, pred_test))
     metrics_dict['h_measure'].append(metrics.h_measure(y_test, pred_test))
+    ks = metrics.ks_score(y_test, test_probs)
+    metrics_dict['ks_statistic'].append(ks[0])
+    metrics_dict['ks_pvalue'].append(ks[1])
     emp = metrics.emp_score_frac(y_test, pred_test)
     metrics_dict['emp_score'].append(emp.EMPC)
     metrics_dict['emp_frac'].append(emp.EMPC_fraction)
@@ -180,10 +184,10 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
         pred_train = clf.predict(X_train)
         pred_val = clf.predict(X_val)
         pred_test = clf.predict(X_test)
-        pred_probs = clf.predict_proba(X_test)[:, 1]
+        test_probs = clf.predict_proba(X_test)[:, 1]
 
         metrics_dict = collect_perf_metrics(metrics_dict, y_train, pred_train, y_val,
-                                            pred_val, y_test, pred_test, pred_probs, classes)
+                                            pred_val, y_test, pred_test, test_probs, classes)
 
         if verbose:
             metrics.classification_report(y_train, pred_train, y_val, pred_val)
@@ -242,12 +246,12 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
             X_val = X_val[k_best_features]
         X_val = X_val.to_numpy().reshape((X_val.shape[0], X_val.shape[1], 1))
 
-        pred_train, pred_val, pred_test, pred_probs = train_tf_model(model_name, layers, classes, learning_rate, epochs,
+        pred_train, pred_val, pred_test, test_probs = train_tf_model(model_name, layers, classes, learning_rate, epochs,
                                                                      batch_size, save_path, fold_counter, X_train,
                                                                      y_train, X_val, y_val, X_test, y_test)
 
         metrics_dict = collect_perf_metrics(metrics_dict, y_train, pred_train, y_val,
-                                            pred_val, y_test, pred_test, pred_probs, classes)
+                                            pred_val, y_test, pred_test, test_probs, classes)
 
         if verbose:
             metrics.classification_report(y_train, pred_train, y_val, pred_val)
@@ -336,12 +340,12 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
         pred_val = tensorflow.one_hot(pred_val, len(classes))
         pred_test = np.argmax(model.predict(X_test), axis=-1)
         pred_test = tensorflow.one_hot(pred_test, len(classes))
-        pred_probs = np.argmax(model.predict(X_test), axis=-1)
+        test_probs = np.argmax(model.predict(X_test), axis=-1)
     else:
         pred_train = (model.predict(X_train) > 0.5).astype("int32")
         pred_val = (model.predict(X_val) > 0.5).astype("int32")
         pred_test = (model.predict(X_test) > 0.5).astype("int32")
-        pred_probs = np.concatenate(model.predict(X_test))
+        test_probs = np.concatenate(model.predict(X_test))
 
     # clean up model
     model = None
@@ -349,7 +353,7 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
     tensorflow.clear_session()
     gc.collect()
 
-    return pred_train, pred_val, pred_test, pred_probs
+    return pred_train, pred_val, pred_test, test_probs
 
 def train_pt_model(train_dl, model):
     """
