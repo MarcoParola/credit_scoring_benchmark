@@ -118,9 +118,9 @@ def collect_perf_metrics(metrics_dict, y_train, pred_train, y_val, pred_val,
 
     return metrics_dict
 
-def k_fold_cross_validate(clf, layers, train_data, test_data, target, classes, k_folds,
-                          features_scores, features, model_name, learning_rate,
-                          epochs, batch_size, verbose):
+def k_fold_cross_validate(model, layers, train_data, test_data, target, classes,
+                          k_folds, features_scores, features, model_name,
+                          learning_rate, epochs, batch_size, verbose):
     """
     Runs k-fold cross validation on the model.
     """
@@ -132,12 +132,14 @@ def k_fold_cross_validate(clf, layers, train_data, test_data, target, classes, k
                                        k_folds, features_scores, features, model_name,
                                        learning_rate, epochs, batch_size, save_path,
                                        verbose)
-    else:
-        k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
+    elif model is not None:
+        k_fold_cross_validate_ml_model(model, train_data, test_data, target, classes,
                                        k_folds, features_scores, features, model_name,
                                        save_path, verbose)
+    else:
+        print('Incorrect parameters configuration.')
 
-def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
+def k_fold_cross_validate_ml_model(model, train_data, test_data, target, classes,
                                    k_folds, features_scores, features, model_name,
                                    save_path, verbose):
     """
@@ -178,14 +180,13 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
             X_test = X_test[k_best_features]
 
         # train model
-        clf = clf.fit(X_train, y_train)
+        model = train_ml_model(model, X_train, y_train)
 
         # test model on train and test set
-        pred_train = clf.predict(X_train)
-        pred_val = clf.predict(X_val)
-        pred_test = clf.predict(X_test)
-        test_probs = clf.predict_proba(X_test)[:, 1]
+        pred_train, pred_val, pred_test, test_probs = \
+            test_ml_model(model, X_train, X_val, X_test)
 
+        # collect and save performance metrics
         metrics_dict = collect_perf_metrics(metrics_dict, y_train, pred_train, y_val,
                                             pred_val, y_test, pred_test, test_probs, classes)
 
@@ -195,6 +196,23 @@ def k_fold_cross_validate_ml_model(clf, train_data, test_data, target, classes,
         fold_counter += 1
 
     metrics.report_performance_metrics(metrics_dict, save_path, model_name, classes)
+
+def train_ml_model(model, X_train, y_train):
+    """
+    Trains the given Scikit-Learn model.
+    """
+    return model.fit(X_train, y_train)
+
+def test_ml_model(model, X_train, X_val, X_test):
+    """
+    Returns predictions on train, validation and test sets for the given
+    Scikit-Learn model.
+    """
+    pred_train = model.predict(X_train)
+    pred_val = model.predict(X_val)
+    pred_test = model.predict(X_test)
+    test_probs = model.predict_proba(X_test)[:, 1]
+    return pred_train, pred_val, pred_test, test_probs
 
 def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classes, k_folds,
                                    features_scores, features, model_name, learning_rate,
@@ -246,10 +264,22 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
             X_val = X_val[k_best_features]
         X_val = X_val.to_numpy().reshape((X_val.shape[0], X_val.shape[1], 1))
 
-        pred_train, pred_val, pred_test, test_probs = train_tf_model(model_name, layers, classes, learning_rate, epochs,
-                                                                     batch_size, save_path, fold_counter, X_train,
-                                                                     y_train, X_val, y_val, X_test, y_test)
+        # train model
+        model = train_tf_model(model_name, layers, classes, learning_rate, epochs,
+                               batch_size, save_path, fold_counter, X_train,
+                               y_train, X_val, y_val)
+        
+        # test model on train, val and test sets
+        pred_train, pred_val, pred_test, test_probs = \
+            evaluate_tf_model(model, X_train, X_val, X_test, classes)
 
+        # clean up model
+        model = None
+        del model
+        tensorflow.clear_session()
+        gc.collect()
+
+        # collect and save performance metrics
         metrics_dict = collect_perf_metrics(metrics_dict, y_train, pred_train, y_val,
                                             pred_val, y_test, pred_test, test_probs, classes)
 
@@ -262,11 +292,10 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
 
     metrics.report_performance_metrics(metrics_dict, save_path, model_name, classes)
 
-def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_size, save_path,
-                   fold_counter, X_train, y_train, X_val, y_val, X_test, y_test):
+def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_size,
+                   save_path, fold_counter, X_train, y_train, X_val, y_val):
     """
-    Trains a Tensorflow model and returns predictions on train, validation and test
-    sets.
+    Trains a Tensorflow model.
     """
     # best fold model save path
     fold_model_save_path = os.path.join(save_path, 'fold-' + str(fold_counter))
@@ -327,12 +356,13 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
     # load best fold model
     model.load_weights(fold_model_save_path)
 
-    # evaluate the best fold model on the test set
-    test_loss, test_accuracy = model.evaluate(X_test, y_test, batch_size=batch_size)
-    print('Test Loss: ' + str(test_loss))
-    print('Test Accuracy: ' + str(test_accuracy))
+    return model
 
-    # test model on train, val and test sets
+def evaluate_tf_model(model, X_train, X_val, X_test, classes):
+    """
+    Returns predictions on train, validation and test sets for the given
+    Tensorflow model.
+    """
     if len(classes) > 2:
         pred_train = np.argmax(model.predict(X_train), axis=-1)
         pred_train = tensorflow.one_hot(pred_train, len(classes))
@@ -346,12 +376,6 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
         pred_val = (model.predict(X_val) > 0.5).astype("int32")
         pred_test = (model.predict(X_test) > 0.5).astype("int32")
         test_probs = np.concatenate(model.predict(X_test))
-
-    # clean up model
-    model = None
-    del model
-    tensorflow.clear_session()
-    gc.collect()
 
     return pred_train, pred_val, pred_test, test_probs
 
