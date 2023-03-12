@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn import metrics
 from hmeasure import h_score
+from scipy.stats import ks_2samp
 from EMP.metrics import empCreditScoring
 
 def accuracy_score(y_true, y_pred, classes):
@@ -96,6 +97,17 @@ def h_measure(y_true, y_pred):
     assert (len(y_true) == len(y_pred))
     return h_score(y_true, y_pred)
 
+def ks_score(y_true, y_pred):
+    """
+    Performs the two-sample Kolmogorov-Smirnov test for goodness of fit.
+    Returns the KS test statistic, and the one-tailed or two-tailed p-value.
+    """
+    assert (len(y_true) == len(y_pred))
+    class0 = y_pred[np.where(y_true == False)[0]]
+    class1 = y_pred[np.where(y_true == True)[0]]
+    ks = ks_2samp(class0, class1)
+    return ks.statistic, ks.pvalue
+    
 def emp_score(y_true, y_pred):
     """
     Computes the expected maximum profit maximization score. It only returns the
@@ -160,28 +172,7 @@ def report_performance_metrics(performance_metrics, save_path, model_name, class
     performance metrics.
     """
     # store metrics as csv file
-    metrics_dict = {'train_accuracy': performance_metrics['train_accuracy'],
-                    'train_f1': performance_metrics['train_f1'],
-                    'train_precision': performance_metrics['train_precision'],
-                    'train_recall': performance_metrics['train_recall'],
-
-                    'val_accuracy': performance_metrics['val_accuracy'],
-                    'val_f1': performance_metrics['val_f1'],
-                    'val_precision': performance_metrics['val_precision'],
-                    'val_recall': performance_metrics['val_recall'],
-
-                    'test_accuracy': performance_metrics['test_accuracy'],
-                    'test_f1': performance_metrics['test_f1'],
-                    'test_precision': performance_metrics['test_precision'],
-                    'test_recall': performance_metrics['test_recall'],
-
-                    'auc': performance_metrics['auc'],
-                    'gini': performance_metrics['gini'],
-                    'brier': performance_metrics['brier'],
-                    'h_measure': performance_metrics['h_measure'],
-                    'emp': performance_metrics['emp_score'],
-                    'emp_frac': performance_metrics['emp_frac']}
-    metrics_df = pd.DataFrame(metrics_dict)
+    metrics_df = pd.DataFrame(performance_metrics)
     metrics_df.to_csv(save_path + '/perf_metrics.csv', index=False)
 
     plot_save_path = save_path + '/' + model_name + '-'
@@ -246,6 +237,12 @@ def report_performance_metrics(performance_metrics, save_path, model_name, class
                            hmeasure_scores = performance_metrics['h_measure'],
                            save_path = plot_save_path,
                            dpi = 100)
+
+    plotting.plot_kstest(model_name = '',
+                         ks_statistic = performance_metrics['ks_statistic'],
+                         ks_pvalue = performance_metrics['ks_pvalue'],
+                         save_path = plot_save_path,
+                         dpi = 100)
 
     # plot folds error costs
     plotting.plot_emp(model_name = '',
