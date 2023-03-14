@@ -7,10 +7,13 @@ tensorflow.py: Implementation of utility functions for Tensorflow models.
 __author__      = "Rambod Rahmani <rambodrahmani@autistici.org>"
 __copyright__   = "Rambod Rahmani 2023"
 
+import logging
 import numpy as np
+import logging
+import matplotlib.pyplot as plt
+
 import tensorflow as tf
 from tensorflow import keras
-import matplotlib.pyplot as plt
 from tensorflow.keras import models, layers, optimizers, losses, callbacks, regularizers, Input, Model
 
 class LearningRateDecay:
@@ -61,6 +64,13 @@ class PolynomialDecay(LearningRateDecay):
 
         # return the new learning rate
         return float(alpha)
+
+def disable_logging():
+    """
+    """
+    tf.keras.utils.disable_interactive_logging() 
+    logger = logging.getLogger()
+    logger.setLevel(logging.CRITICAL)
 
 def sequential_model(name):
     """
@@ -118,7 +128,7 @@ def AdadeltaOptimizer(learning_rate):
     """
     return optimizers.Adadelta(learning_rate=learning_rate)
 
-def BinaryCrossentropyLoss():
+def BinaryCrossentropy():
     """
     """
     return losses.BinaryCrossentropy()
@@ -201,7 +211,7 @@ def point_net_model():
     inputs = Input(shape=(11, 1))
 
     # layers
-    x = tnet(inputs, 1)
+    x = tnet(normal_input, 1)
     x = conv_bn(x, 32)
     x = conv_bn(x, 32)
     x = tnet(x, 32)

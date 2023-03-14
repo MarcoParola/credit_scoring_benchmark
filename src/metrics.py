@@ -173,6 +173,7 @@ def report_performance_metrics(performance_metrics, save_path, model_name, class
     """
     # store metrics as csv file
     metrics_df = pd.DataFrame(performance_metrics)
+    metrics_df.loc['mean'] = metrics_df.mean()
     metrics_df.to_csv(save_path + '/perf_metrics.csv', index=False)
 
     plot_save_path = save_path + '/' + model_name + '-'

@@ -235,6 +235,9 @@ def k_fold_cross_validate_dl_model(layers, train_data, test_data, target, classe
     """
     Runs k-fold cross validation on the Sequential model built using the given layers.
     """
+    if not verbose:
+        tensorflow.disable_logging()
+
     metrics_dict = {}
 
     # separate class label from other features
@@ -345,7 +348,7 @@ def train_tf_model(model_name, layers, classes, learning_rate, epochs, batch_siz
 
     # compile model
     optimizer = tensorflow.RMSpropOptimizer(learning_rate=learning_rate)
-    loss_function = tensorflow.BinaryFocalCrossentropy(apply_class_balancing=True, alpha=0.70)
+    loss_function = tensorflow.BinaryCrossentropy()
 
     model.compile(optimizer=optimizer,
                   loss=loss_function,
