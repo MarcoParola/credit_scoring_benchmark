@@ -108,23 +108,35 @@ def ks_score(y_true, y_pred):
     ks = ks_2samp(class0, class1)
     return ks.statistic, ks.pvalue
     
+def compute_lgd_point_masses(y_true, y_pred):
+    """
+    Estimates the bimodal LGD function point masses p0 and p1.
+    """
+    p_0 = len(np.where(y_true == False)[0])/len(y_true)
+    p_1 = len(np.where(y_true == True)[0])/len(y_true)
+    return p_0, p_1
+
 def emp_score(y_true, y_pred):
     """
-    Computes the expected maximum profit maximization score. It only returns the
-    score.
+    Estimates the EMP for credit risk scoring, considering constant ROI and a
+    bimodal LGD function with point masses p0 and p1 for no loss and total loss,
+    respectively. It only returns the score.
     """
     assert (len(y_true) == len(y_pred))
-    return empCreditScoring(y_pred, y_true, p_0=0.800503355704698, p_1=0.199496644295302,
-                            ROI=0.2644, print_output=False)[0]
+    p_0, p_1 = compute_lgd_point_masses(y_true, y_pred)
+    return empCreditScoring(y_pred, y_true, p_0=p_0, p_1=p_1, ROI=0.2644,
+                            print_output=False)[0]
 
 def emp_score_frac(y_true, y_pred):
     """
-    Computes the expected maximum profit maximization score. It returns both the
-    score and the fraction of excluded.
+    Estimates the EMP for credit risk scoring, considering constant ROI and a
+    bimodal LGD function with point masses p0 and p1 for no loss and total loss,
+    respectively. It returns both the score and the fraction of excluded.
     """
     assert (len(y_true) == len(y_pred))
-    return empCreditScoring(y_pred, y_true, p_0=0.800503355704698, p_1=0.199496644295302,
-                            ROI=0.2644, print_output=False)
+    p_0, p_1 = compute_lgd_point_masses(y_true, y_pred)
+    return empCreditScoring(y_pred, y_true, p_0=p_0, p_1=p_1, ROI=0.2644,
+                            print_output=False)
 
 def cm_score(y_true, y_pred, classes):
     """

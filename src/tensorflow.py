@@ -211,7 +211,7 @@ def point_net_model():
     inputs = Input(shape=(11, 1))
 
     # layers
-    x = tnet(normal_input, 1)
+    x = tnet(inputs, 1)
     x = conv_bn(x, 32)
     x = conv_bn(x, 32)
     x = tnet(x, 32)
